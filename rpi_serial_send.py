@@ -27,7 +27,7 @@ def send_cmd ():
 		com.write(cmd_group[cmd])
 
 
-def send_serial():
+def send_serial():	#sends same char array every 5 seconds. Can be used with MegaPi_Serial_Port_Checker.
 	ser = serial.Serial('/dev/serial0')
 	while True:
 		ser.write('Run'.encode())
@@ -37,5 +37,6 @@ def send_serial():
 			print('message: ')
 			print(message)
 
-set_cmd()
-send_cmd()
+#set_cmd()
+#send_cmd()
+send_serial()
