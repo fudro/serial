@@ -7,7 +7,7 @@
 
 
 int data = 0;
-const int COMMAND_LENGTH = 2; //The number of elements in a command. RPi and MegaPi MUST use the same value.
+const int COMMAND_LENGTH = 6; //The number of elements in a command. RPi and MegaPi MUST use the same value.
 byte commandBuffer[COMMAND_LENGTH]; //create storage buffer for the command message.
 
 void setup() 
@@ -26,7 +26,13 @@ void loop()
     //Identify and execute command
     switch(commandBuffer[0]){
       case 217:
-        blinkLED(3);
+        //blinkLED(3);
+        commandBuffer[0] = 217;
+        commandBuffer[1] = 30;
+        commandBuffer[2] = 30;
+        commandBuffer[3] = 30;
+        commandBuffer[4] = 0;
+        commandBuffer[5] = 0;
       break;
       case 114:
         blinkLED(2);
@@ -45,7 +51,7 @@ void loop()
 
 void blinkLED(int blinkCount)
 {
-  int duration = 400;
+  int duration = 1000;
   for(int i=0; i<blinkCount; i++) {
     digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
     delay(duration);                       // wait for a second
