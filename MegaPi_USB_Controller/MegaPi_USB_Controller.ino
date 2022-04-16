@@ -3,6 +3,9 @@
  * This program allows the Mega Pi motor controller to receives serial commands via the USB port. Command data is sent as a byte array. 
  * The program will parse the incoming command, run the associated code, and return any values from tracking variables or sensors.
  * 
+ * APPLICATIONS:
+ * a) Used as part of a full loop communication system between: Unity <->(via WiFi)<-> Raspberry Pi <->(via Serial)<-> Mega Pi motor controller.
+ * 
  * HARDWARE COMPATIBILITY:
  * MegaPi Microcontroller
  * Encoder/DC Motor Driver Board (both MegaPi and MegaPi Pro versions)
