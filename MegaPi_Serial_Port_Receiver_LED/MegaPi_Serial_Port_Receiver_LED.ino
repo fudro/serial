@@ -6,7 +6,6 @@
 #include "MeMegaPi.h"
 
 
-int data = 0;
 const int COMMAND_LENGTH = 6; //The number of elements in a command. RPi and MegaPi MUST use the same value.
 byte commandBuffer[COMMAND_LENGTH]; //create storage buffer for the command message.
 
