@@ -117,14 +117,27 @@ int runFlag = 1;  //test variable
 //Data Variables
 const int COMMAND_LENGTH = 6; //The number of elements in a command. RPi and MegaPi MUST use the same value.
 byte commandBuffer[COMMAND_LENGTH]; //create storage buffer for the command message.
+enum wind_directions_t {NO_WIND = 4, NORTH_WIND = 3, SOUTH_WIND = 2, EAST_WIND = 1, WEST_WIND = 0};
+enum commandName {ARM_GRIPPER   = 100, 
+                  ARM_WRIST     = 101, 
+                  ARM_ELBOW     = 102, 
+                  ARM_SHOULDER  = 103, 
+                  ARM_BASE      = 104, 
+                  BODY_GRIPPER  = 120, 
+                  WHEELS_LEFT   = 121, 
+                  WHEELS_RIGHT  = 122,
+                  IMU_SENSOR    = 140,
+                  SONAR_SENSOR  = 141,
+                  LIDAR_SENSOR  = 142};
 
 //the runArray[] determines which motor functions are active (0 = inactive, 1 = active). Event if code is called by the main loop, the flag array will prevent code execution if motor is not set to "active" (1)
-int runArray[] = {1,  //runArray[0]: armGripper
-                  1,  //runArray[1]: wrist
-                  1,  //runArray[2]: elbow
-                  1,  //runArray[3]: shoulder
-                  1,  //runArray[4]: turntable
-                  1,  //runArray[5]: tailGripper
+//Each flag will be enabled when the individual command is called.
+int runArray[] = {0,  //runArray[0]: armGripper
+                  0,  //runArray[1]: wrist
+                  0,  //runArray[2]: elbow
+                  0,  //runArray[3]: shoulder
+                  0,  //runArray[4]: turntable
+                  0,  //runArray[5]: tailGripper
                   0,  //runArray[6]: drive
                   0   //runArray[7]: sonar
 };
@@ -183,24 +196,27 @@ void loop()
     Serial.readBytes(commandBuffer, COMMAND_LENGTH);  //Store command elements into the commandBuffer
     //Identify command by checking the first element of the byte array, then execute the associated code.
     switch(commandBuffer[0]){
-      //TODO: SET CODE ASSOCIATED WITH EACH COMMAND ID
-      case 100:   //Arm Gripper
-        //Run associated command function and assign command elements to corresponding parameters
-        blinkLED(5);
-        armGripper(commandBuffer[1]);   //Call armGripper function with first parameter of command
-        //Asign return values
-//        commandBuffer[0] = 100; //Command Code
-//        commandBuffer[1] = 0;  //Gripper State (Open = 0, Closed = 1)
-//        commandBuffer[2] = 0;
-//        commandBuffer[3] = 0;
-//        commandBuffer[4] = 0;
-//        commandBuffer[5] = 0;
+      case ARM_GRIPPER:
+        runArray[0] = 1;  //Set flag to enable command.
+        armGripper(commandBuffer[1]);   //Call armGripper function with first parameter of command (Open = 0, Close = 1)
       break;
-      case 114:
-        //blinkLED(2);
+      case ARM_WRIST:
+        runArray[1] = 1;  //Set flag to enable command.
+        wristRotate(commandBuffer[1], commandBuffer[2], float(commandBuffer[3]));   //commandBuffer[1]: H = 0, V = 1; commandBuffer[2]: CW = 0, CCW = 1; commandBuffer[3]: integer value 1-3
+      break;
+      case SONAR_SENSOR:
+        runArray[7] = 1;
+        getSonar();
       break;
       default:
-        //blinkLED(1);
+        blinkLED(5);
+        //Set return values. If command not recognized, send back an array of all zeros.
+        commandBuffer[0] = 0; //Command Code
+        commandBuffer[1] = 0;
+        commandBuffer[2] = 0;
+        commandBuffer[3] = 0;
+        commandBuffer[4] = 0;
+        commandBuffer[5] = 0;
       break;
     }
 
@@ -544,36 +560,20 @@ void turnTableMove(int turnDegrees = 0, int turnDirection = CW, int turnSpeed = 
 
 void armGripper(int gripState, int gripTime = ARMGRIPTIME) {
   if (runArray[0] == 1) {
-//    runArray[0] = 0;    //Uncomment to force command to run ONLY once.
+    runArray[0] = 0;    //Reset flag to force command to run ONLY once.
     int gripSpeed = 255;   // value: between -255 and 255. It is rarely necessary to change the gripper speed, so it is only a local variable
-//    Serial.print("\n");
-//    Serial.println("Arm Gripper...");
     if (gripState == OPEN) {
-//      Serial.println("Arm Open:");
-//      Serial.print("Speed: ");
-//      Serial.println(gripSpeed);
-//      Serial.print("Time: ");
-//      Serial.println(gripTime);
-//      Serial.print("\n");
       armGrip.run(gripSpeed); 
       delay(gripTime);
       armGrip.stop();
     }
     else if (gripState == CLOSE) {
-//      Serial.print("\n");
-//      Serial.println("Arm Close:");
-//      Serial.print("Speed: ");
-//      Serial.println(-gripSpeed);
-//      Serial.print("Time: ");
-//      Serial.println(gripTime);
-//      Serial.print("\n");
       armGrip.run(-gripSpeed); 
       delay(gripTime);
       armGrip.stop();
     }
     //Set return value
-//    memset(commandBuffer, 0, sizeof(commandBuffer));
-    commandBuffer[0] = 100; //Command Code
+    commandBuffer[0] = ARM_GRIPPER; //Command Code
     commandBuffer[1] = gripState;  //Gripper State (Open = 0, Closed = 1)
     commandBuffer[2] = 0;
     commandBuffer[3] = 0;
@@ -591,25 +591,25 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
     int count = 0;    //iterator variable to count the number of hardware screws passed during rotation (number of times the wrist switch is activated)
     float switchCount = 0;  //number of times the wrist switch is activated. 
 
-    Serial.print("\n");
-    Serial.print("Wrist Rotation!");
-    Serial.print("\n");
-    Serial.print("Wrist Direction: ");
-    if(wristDirection == CW) {
-      Serial.print("CW");
-    }
-    else if(wristDirection == CCW) {
-      Serial.print("CCW");
-    }
-    Serial.print("\n");
-    Serial.print("Target Orientation: ");
-    if(targetState == H) {
-      Serial.print("H");
-    }
-    else if(targetState == V) {
-      Serial.print("V");
-    }
-    Serial.print("\n");
+//    Serial.print("\n");
+//    Serial.print("Wrist Rotation!");
+//    Serial.print("\n");
+//    Serial.print("Wrist Direction: ");
+//    if(wristDirection == CW) {
+//      Serial.print("CW");
+//    }
+//    else if(wristDirection == CCW) {
+//      Serial.print("CCW");
+//    }
+//    Serial.print("\n");
+//    Serial.print("Target Orientation: ");
+//    if(targetState == H) {
+//      Serial.print("H");
+//    }
+//    else if(targetState == V) {
+//      Serial.print("V");
+//    }
+//    Serial.print("\n");
     
     //Update wristState
     if(digitalRead(WRIST_SWITCH) == HIGH && digitalRead(WRIST_HALL) == LOW) {  //If switch AND hall effect sensors are both "activated" (hall sensor is LOW when active), gripper is HORIZONTAL (H)
@@ -618,18 +618,18 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
     else if(digitalRead(WRIST_SWITCH) == HIGH && digitalRead(WRIST_HALL) == HIGH) { //If switch is activated (HIGH) but hall effect sensor is NOT (hall sensor is LOW when active), gripper is VERTICAL (V)
       wristState = V;
     }
-    Serial.print("Start Orientation: ");
-    if(wristState == H) {
-      Serial.print("H");
-    }
-    else if(wristState == V) {
-      Serial.print("V");
-    }
-    Serial.print("\n");
-    Serial.print("Switch State: ");
-    Serial.print(digitalRead(WRIST_SWITCH));
-    Serial.print("\n");
-    Serial.print("\n");
+//    Serial.print("Start Orientation: ");
+//    if(wristState == H) {
+//      Serial.print("H");
+//    }
+//    else if(wristState == V) {
+//      Serial.print("V");
+//    }
+//    Serial.print("\n");
+//    Serial.print("Switch State: ");
+//    Serial.print(digitalRead(WRIST_SWITCH));
+//    Serial.print("\n");
+//    Serial.print("\n");
 
     //Set sign of motor speed based on desired rotation direction
     if(wristDirection == CCW) {   //rotation direction is determined as if the arm is a part of your body an you are looking down the arm toward the gripper
@@ -637,10 +637,10 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
     }
     //Convert wristRevolution value to required count of switch activations (number of hardware screws that must be passed during rotation)
     switchCount = int(wristRevolution * 4);   //There are 4 hardware screws per one revolution. A fractional value for wristRevolution will produce an integer value less than 4.
-    Serial.print("Switch Count: ");
-    Serial.print(switchCount);
-    Serial.print("\n");
-    Serial.print("\n");
+//    Serial.print("Switch Count: ");
+//    Serial.print(switchCount);
+//    Serial.print("\n");
+//    Serial.print("\n");
     //Initialize wrist postion to the nearest cardinal position (determined by switch activation by one of 4 hardware screws combined with state of hall effect sensor)
     if(digitalRead(WRIST_SWITCH) == LOW){     //If switch starts in UNPRESSED (LOW) state (switch is NOT currently positioned over a hardware screw)
       armWrist.run(wristSpeed);               //Run motor until a switch is activated (which means wrist is in one of the cardinal directions)
@@ -664,11 +664,25 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
       }
       if(wristState == targetState && switchCount < 1) {    //if wrist was already in the desired orientation (wrist did not need to move), set flag that movement is finished
         runArray[1] = 0;
+        //Set Return Values
+        commandBuffer[0] = ARM_WRIST;
+        commandBuffer[1] = wristState;
+        commandBuffer[2] = 0;
+        commandBuffer[3] = 0;
+        commandBuffer[4] = 0;
+        commandBuffer[5] = 0;
       }
     }
     else if(digitalRead(WRIST_SWITCH) == HIGH){ //If switch starts in PRESSED state (switch IS currently positioned over a hardware screw)
       if(wristState == targetState && switchCount < 1) {    //Check if the wrist is already in the desired target state and no additional rotation is required, set flag that movement is finished
         runArray[1] = 0;
+        //Set Return Values
+        commandBuffer[0] = ARM_WRIST;
+        commandBuffer[1] = wristState;
+        commandBuffer[2] = 0;
+        commandBuffer[3] = 0;
+        commandBuffer[4] = 0;
+        commandBuffer[5] = 0;
       }
       else {    //otherwise, if wrist movement IS required...
         if(switchCount >= 1) {
@@ -681,12 +695,12 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
               //Wait for switch to re-activate (move onto the next screw position)
             }
             count++;    //Update count for each new screw detected during rotation
-            Serial.print("Switch Count: ");
-            Serial.print(switchCount);
-            Serial.print("\t");
-            Serial.print("Current Count: ");
-            Serial.print(count);
-            Serial.print("\n");
+//            Serial.print("Switch Count: ");
+//            Serial.print(switchCount);
+//            Serial.print("\t");
+//            Serial.print("Current Count: ");
+//            Serial.print(count);
+//            Serial.print("\n");
           }
           delay(50);  //Insert slight delay to allow switch roller to fully seat over the hardware screw.
           //Brake motor once correct number of screws are passed through
@@ -708,6 +722,13 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
       
       if(wristState == targetState) { //If targetState has been achieved after rotation, set flag to finish routine and prevent function from re-running
         runArray[1] = 0;
+        //Set Return Values
+        commandBuffer[0] = ARM_WRIST;
+        commandBuffer[1] = wristState;
+        commandBuffer[2] = 0;
+        commandBuffer[3] = 0;
+        commandBuffer[4] = 0;
+        commandBuffer[5] = 0;
       }
       else {    //If target state has NOT been achieved after rotation
         armWrist.run(wristSpeed);   //Run motor until switch is re-activated (which means wrist has rotated 90 degrees to a new cardinal direction but different from the last)
@@ -734,6 +755,13 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
         }
         if(wristState == targetState) { //If targetState has been achieved after rotation, set flag to finish routine and prevent function from re-running
           runArray[1] = 0;
+          //Set Return Values
+          commandBuffer[0] = ARM_WRIST;
+          commandBuffer[1] = wristState;
+          commandBuffer[2] = 0;
+          commandBuffer[3] = 0;
+          commandBuffer[4] = 0;
+          commandBuffer[5] = 0;
         }
       }
     }
@@ -850,51 +878,50 @@ void shoulderMove(int shoulderPosition = 550, int shoulderSpeed = 127) {  //Defa
   }
 }
 
+
 void getSonar() {
   if(runArray[7] == 1) {
     digitalWrite(SONAR_TRIGGER, HIGH);   //pull HIGH to activate first sensor in the chain
-    delay(20);
+    delay(100);
     digitalWrite(SONAR_TRIGGER, LOW);
-    delay(20);
-  
-    for (int i = 0; i < NUM_SAMPLES; i++) {
-      left_sonar[i] = analogRead(SONAR_LEFT);
-      center_sonar[i] = analogRead(SONAR_CENTER);
-      right_sonar[i] = analogRead(SONAR_RIGHT);
+    delay(50);
+
+    for(sort_count = 0; sort_count < NUM_SAMPLES; sort_count++) {
+      for (int i = 0; i < NUM_SAMPLES; i++) {
+        left_sonar[i] = analogRead(SONAR_LEFT);       //Get sonar readings
+        center_sonar[i] = analogRead(SONAR_CENTER);
+        right_sonar[i] = analogRead(SONAR_RIGHT);
+      }
+      sort(left_sonar, NUM_SAMPLES);        //Sort the readings in ascending order
+      sort(center_sonar, NUM_SAMPLES);
+      sort(right_sonar, NUM_SAMPLES);
+
+      left_sort_array[sort_count] = left_sonar[NUM_SAMPLES - random(SAMPLE_OFFSET, SAMPLE_OFFSET + 2)]/2;      //Select a reading at a specific index, adjust value by dividing in half, and add value to the sorted array for each sensor
+      center_sort_array[sort_count] = center_sonar[NUM_SAMPLES - random(SAMPLE_OFFSET, SAMPLE_OFFSET + 2)]/2;
+      right_sort_array[sort_count] = right_sonar[NUM_SAMPLES - random(SAMPLE_OFFSET, SAMPLE_OFFSET + 2)]/2;
+
+      memset(left_sonar, 0, sizeof(left_sonar));    //reset unsorted arrays
+      memset(center_sonar, 0, sizeof(center_sonar));
+      memset(right_sonar, 0, sizeof(right_sonar));
     }
-  
-    sort(left_sonar, NUM_SAMPLES);
-    sort(center_sonar, NUM_SAMPLES);
-    sort(right_sonar, NUM_SAMPLES);
-  
-    if(sort_count < NUM_SAMPLES) {
-      left_sort_array[sort_count] = left_sonar[NUM_SAMPLES - SAMPLE_OFFSET]/2;
-      center_sort_array[sort_count] = center_sonar[NUM_SAMPLES - SAMPLE_OFFSET]/2;
-      right_sort_array[sort_count] = right_sonar[NUM_SAMPLES - SAMPLE_OFFSET]/2;
-      sort_count++;
-    }
-    else {
-      sort_count = 0;
-      sort(left_sort_array, NUM_SAMPLES);
-      sort(center_sort_array, NUM_SAMPLES);
-      sort(right_sort_array, NUM_SAMPLES);
-      Serial.print("Sonar Ranges: ");
-      Serial.print("\t");
-      Serial.print("L: ");
-      Serial.print(left_sort_array[NUM_SAMPLES - SAMPLE_OFFSET]);
-      Serial.print("\t");
-      Serial.print("C: ");
-      Serial.print(center_sort_array[NUM_SAMPLES - SAMPLE_OFFSET]);
-      Serial.print("\t");
-      Serial.print("R: ");
-      Serial.print(right_sort_array[NUM_SAMPLES - SAMPLE_OFFSET]);
-      Serial.print("\n");
-      runArray[7] = 0;
-    }
-  
-    memset(left_sonar, 0, sizeof(left_sonar));    //reset arrays
-    memset(center_sonar, 0, sizeof(center_sonar));
-    memset(right_sonar, 0, sizeof(right_sonar));
+    sort_count = 0;     //Reset sort count
+    sort(left_sort_array, NUM_SAMPLES);   //Perform a final sort of the slected readings
+    sort(center_sort_array, NUM_SAMPLES);
+    sort(right_sort_array, NUM_SAMPLES);
+    
+    //Set return values
+    commandBuffer[0] = SONAR_SENSOR; //Command Code
+    commandBuffer[1] = left_sort_array[NUM_SAMPLES - SAMPLE_OFFSET];    //Left Sonar Sensor - make final slelction at a specific index
+    commandBuffer[2] = center_sort_array[NUM_SAMPLES - SAMPLE_OFFSET];  //Center Sonar Sensor - make final slelction at a specific index
+    commandBuffer[3] = right_sort_array[NUM_SAMPLES - SAMPLE_OFFSET];   //Right Sonar Sensor - make final slelction at a specific index
+    commandBuffer[4] = 0;
+    commandBuffer[5] = 0;
+
+    memset(left_sort_array, 0, sizeof(left_sort_array));    //reset sorted arrays
+    memset(center_sort_array, 0, sizeof(center_sort_array));
+    memset(right_sort_array, 0, sizeof(right_sort_array));
+
+    runArray[7] = 0;    //Reset flag to force command to run ONLY once.
   }
 }
 
