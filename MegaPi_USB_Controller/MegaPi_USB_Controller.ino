@@ -76,9 +76,9 @@ int SAMPLE_OFFSET = 3;  //number of entries from the max entry of the sorted arr
 //Potentiometer Limits
 const int ELBOW_MAX = 700;  //Elbow UPPER limit
 const int ELBOW_GRIP = 250; //Best position where the arm gripper can transfer an object to the tail gripper.
-const int ELBOW_MIN = 20; //Elbow LOWER limit
-const int SHOULDER_MAX = 400; //Shoulder UPPER limit. REVERSED: sensor value DECREASES when the arm is moving UP.
-const int SHOULDER_MIN = 600; //Shoulder LOWER limit. REVERSED: sensor value INCREASES when the arm is moving DOWN.
+const int ELBOW_MIN = 225; //Elbow LOWER limit
+const int SHOULDER_MAX = 425; //Shoulder UPPER limit. REVERSED: sensor value DECREASES when the arm is moving UP.
+const int SHOULDER_MIN = 625; //Shoulder LOWER limit. REVERSED: sensor value INCREASES when the arm is moving DOWN.
 //Encoder Limits
 const int TURNTABLE_ANALOG_MAX = 875;
 const int TURNTABLE_ANALOG_MIN = 650;
@@ -147,8 +147,8 @@ int runArray[] = {0,  //runArray[0]: armGripper
 ***********************************/
 void armGripper(int gripState, int gripTime = ARMGRIPTIME); //gripState is OPEN or CLOSE
 void wristRotate (int targetState, int wristDirection = CW, float wristRevolution = 0.0, int wristSpeed = 255);  //targetState is (V)ertical or (H)orizontal, wristRevolution is the number of full revolutions to be perfomed.
-void elbowMove(int elbowPosition = 500, int elbowSpeed = 65);  //approximate center position and preferred default speed.
-void shoulderMove(int shoulderPosition = 550, int shoulderSpeed = 127); //approximate center position and preferred default speed.
+void elbowMove(int elbowPosition = 550, int elbowSpeed = 65);  //approximate center position and preferred default speed.
+void shoulderMove(int shoulderPosition = 575, int shoulderSpeed = 127); //approximate center position and preferred default speed.
 void turnTableMove(int turnDegrees = 0, int turnDirection = CW, int turnSpeed = 65);    //turnDegrees is the degrees of angular rotation from the current position
 void tailGripper(int gripState, int gripTime = TAILGRIPTIME); //gripState is OPEN or CLOSE
 void driveMove(int driveDistance = 20, int driveDirection = FW, int driveSpeed = 127);
@@ -202,7 +202,15 @@ void loop()
       break;
       case ARM_WRIST:
         runArray[1] = 1;  //Set flag to enable command.
-        wristRotate(commandBuffer[1], commandBuffer[2], float(commandBuffer[3]));   //commandBuffer[1]: H = 0, V = 1; commandBuffer[2]: CW = 0, CCW = 1; commandBuffer[3]: integer value 1-3
+        wristRotate(commandBuffer[1], commandBuffer[2], float(commandBuffer[3]), commandBuffer[4]);   //commandBuffer[1]: H = 0, V = 1; commandBuffer[2]: CW = 0, CCW = 1; commandBuffer[3]: integer value 1-3
+      break;
+      case ARM_ELBOW:
+        runArray[2] = 1;
+        elbowMove(commandBuffer[1] * 5 + ELBOW_MIN);  //Call elbowMove with only the first parameter as the target position. Mulitply by 5 and add offset to convert the single byte value to proper values for the sensor.
+      break;
+      case ARM_SHOULDER:
+        runArray[3] = 1;
+        shoulderMove(commandBuffer[1] + SHOULDER_MAX);  //Call shoulderMove with only the first parameter as the target position. Add offset to convert the single byte value to proper values for the sensor.
       break;
       case SONAR_SENSOR:
         runArray[7] = 1;
@@ -667,9 +675,9 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
         //Set Return Values
         commandBuffer[0] = ARM_WRIST;
         commandBuffer[1] = wristState;
-        commandBuffer[2] = 0;
-        commandBuffer[3] = 0;
-        commandBuffer[4] = 0;
+        commandBuffer[2] = wristDirection;
+        commandBuffer[3] = wristRevolution;
+        commandBuffer[4] = wristSpeed;
         commandBuffer[5] = 0;
       }
     }
@@ -679,9 +687,9 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
         //Set Return Values
         commandBuffer[0] = ARM_WRIST;
         commandBuffer[1] = wristState;
-        commandBuffer[2] = 0;
-        commandBuffer[3] = 0;
-        commandBuffer[4] = 0;
+        commandBuffer[2] = wristDirection;
+        commandBuffer[3] = wristRevolution;
+        commandBuffer[4] = wristSpeed;
         commandBuffer[5] = 0;
       }
       else {    //otherwise, if wrist movement IS required...
@@ -771,25 +779,25 @@ void wristRotate(int targetState, int wristDirection = CW, float wristRevolution
 /*
  * ELBOW RANGES
  * UpperMax Gripper fully "up" against arm bar): 700
- * MidPoint (Gripper roughly "level" with arm bar): 500
- * LowerMax Gripper fully "down" compared to arm bar): 80
+ * MidPoint (Gripper roughly "level" with arm bar): 550
+ * LowerMax Gripper fully "down" compared to arm bar): 225
  */
-void elbowMove(int elbowPosition = 500, int elbowSpeed = 65) { //Default values allow the function to be called without arguments to reset to a default position (at the default speed).
+void elbowMove(int elbowPosition = 550, int elbowSpeed = 65) { //Default values allow the function to be called without arguments to reset to a default position (at the default speed).
   if(runArray[2] == 1) {    //Check flag to prevent unnecessary re-triggering of the function
     if(elbowPosition >= ELBOW_MIN && elbowPosition <= ELBOW_MAX) {   //Check if command value is within allowed range
       int lastPosition = analogRead(ELBOW_POT);   //read encoder position
       if(elbowPosition < lastPosition) {  //If the desired postion is physically LOWER than the last read position.
-        Serial.print("\n");
-        Serial.println("Elbow Down");
-        Serial.print("Target Position: ");
-        Serial.print(elbowPosition);
-        Serial.print("\n\n");
+//        Serial.print("\n");
+//        Serial.println("Elbow Down");
+//        Serial.print("Target Position: ");
+//        Serial.print(elbowPosition);
+//        Serial.print("\n\n");
         while(elbowPosition < lastPosition) {   //while target positiion is still lower than the last read position
           elbow.run(-elbowSpeed);   //set motor direction
           delay(10);               //wait for small amount of elbow movement
           lastPosition = analogRead(ELBOW_POT);   //get new position
-          Serial.print("Elbow Position: ");
-          Serial.println(lastPosition);
+//          Serial.print("Elbow Position: ");
+//          Serial.println(lastPosition);
         }
         //Brake motor once target position is reached
         elbow.stop();
@@ -799,17 +807,17 @@ void elbowMove(int elbowPosition = 500, int elbowSpeed = 65) { //Default values 
         elbow.stop();
       }
       else if(elbowPosition > lastPosition) {  //If the desired postion is physically HIGHER than the last read position.
-        Serial.print("\n");
-        Serial.println("Elbow Up");
-        Serial.print("Target Position: ");
-        Serial.print(elbowPosition);
-        Serial.print("\n\n");
+//        Serial.print("\n");
+//        Serial.println("Elbow Up");
+//        Serial.print("Target Position: ");
+//        Serial.print(elbowPosition);
+//        Serial.print("\n\n");
         while(elbowPosition > lastPosition) {
           elbow.run(elbowSpeed);
           delay(10);
           lastPosition = analogRead(ELBOW_POT);
-          Serial.print("Elbow Position: ");
-          Serial.println(lastPosition);
+//          Serial.print("Elbow Position: ");
+//          Serial.println(lastPosition);
         }
         //Brake motor once target position is reached
         elbow.stop();
@@ -818,6 +826,13 @@ void elbowMove(int elbowPosition = 500, int elbowSpeed = 65) { //Default values 
         elbow.run(0);    //Release motor by setting speed to zero
         elbow.stop();
       }
+      //Set return values. If command not recognized, send back an array of all zeros.
+      commandBuffer[0] = ARM_ELBOW; //Command Code
+      commandBuffer[1] = int(elbowPosition/5 - ELBOW_MIN); //Divide by 5 and round to convert sensor value to a single byte value.
+      commandBuffer[2] = 0;
+      commandBuffer[3] = 0;
+      commandBuffer[4] = 0;
+      commandBuffer[5] = 0;
       runArray[2] = 0;
     }
   }
@@ -825,26 +840,28 @@ void elbowMove(int elbowPosition = 500, int elbowSpeed = 65) { //Default values 
 
 /*
  * SHOULDER RANGES
- * LowerMax (Lowest arm bar "down" position over rear of robot): 600
+ * LowerMax (Lowest arm bar "down" position over rear of robot): 625
  * MidPoint (Gripper roughly "level" with arm bar): 575
- * UpperMax (Highest arm bar position): 375
+ * UpperMax (Highest arm bar position): 425
  */
-void shoulderMove(int shoulderPosition = 550, int shoulderSpeed = 127) {  //Default values allow the function to be called without arguments to reset to a default position (at the default speed).
+void shoulderMove(int shoulderPosition = 575, int shoulderSpeed = 127) {  //Default values allow the function to be called without arguments to reset to a default position (at the default speed).
   if(runArray[3] == 1) {    //Check flag to prevent unnecessary re-triggering of the function
     if(shoulderPosition <= SHOULDER_MIN && shoulderPosition >= SHOULDER_MAX) {   //Check if command value is within allowed range. REVERSED: sensor values INCREASE when arm moves DOWN.
       int lastPosition = analogRead(SHOULDER_POT);    //get last reading from sensor
+      int newPosition = analogRead(SHOULDER_POT);    //store interim value to check for errant sensor values
+      int errorThreshold = 25;    //Amount of variance allowed between the last sensor reading and the next
       if(shoulderPosition < lastPosition) {  //If the desired postion is physically HIGHER than the last read position.
-        Serial.print("\n");
-        Serial.println("Shoulder Up");
-        Serial.print("Target Position: ");
-        Serial.print(shoulderPosition);
-        Serial.print("\n\n");
+//        Serial.print("\n");
+//        Serial.println("Shoulder Up");
+//        Serial.print("Target Position: ");
+//        Serial.print(shoulderPosition);
+//        Serial.print("\n\n");
         while(shoulderPosition < lastPosition) {
           shoulder.run(-shoulderSpeed);     //set motor direction
           delay(70);                       //wait for small amount of shoulder movement
           lastPosition = analogRead(SHOULDER_POT);    //get new position
-          Serial.print("Shoulder Postition: ");
-          Serial.println(lastPosition);
+//          Serial.print("Shoulder Postition: ");
+//          Serial.println(lastPosition);
         }
         //Brake motor once switch is activated
         shoulder.stop();
@@ -854,17 +871,23 @@ void shoulderMove(int shoulderPosition = 550, int shoulderSpeed = 127) {  //Defa
         shoulder.stop();
       }
       else if(shoulderPosition > lastPosition) {  //If the desired postion is physically LOWER than the last read position.
-        Serial.print("\n");
-        Serial.println("Shoulder Down");
-        Serial.print("Target Position: ");
-        Serial.print(shoulderPosition);
-        Serial.print("\n\n");
+//        Serial.print("\n");
+//        Serial.println("Shoulder Down");
+//        Serial.print("Target Position: ");
+//        Serial.print(shoulderPosition);
+//        Serial.print("\n\n");
         while(shoulderPosition > lastPosition) {
           shoulder.run(shoulderSpeed);
           delay(70);
-          lastPosition = analogRead(SHOULDER_POT);
-          Serial.print("Shoulder Position: ");
-          Serial.println(lastPosition);
+          newPosition = analogRead(SHOULDER_POT);   //get new sensor reading
+          while(newPosition - lastPosition > errorThreshold) {    //If new sensor reading is way bigger than the last reading, get the sensor reading again
+            newPosition = analogRead(SHOULDER_POT);
+//            Serial.print("New Position: ");
+//            Serial.println(newPosition);
+          }
+          lastPosition = newPosition;
+//          Serial.print("Last Position: ");
+//          Serial.println(lastPosition);
         }
         //Brake motor once switch is activated
         shoulder.stop();
@@ -873,6 +896,13 @@ void shoulderMove(int shoulderPosition = 550, int shoulderSpeed = 127) {  //Defa
         shoulder.run(0);    //Release motor by setting speed to zero
         shoulder.stop();
       }
+      //Set return values. If command not recognized, send back an array of all zeros.
+      commandBuffer[0] = ARM_SHOULDER; //Command Code
+      commandBuffer[1] = int(shoulderPosition - SHOULDER_MAX); //Subtract minimum value to convert sensor value to a single byte value.
+      commandBuffer[2] = 0;
+      commandBuffer[3] = 0;
+      commandBuffer[4] = 0;
+      commandBuffer[5] = 0;
       runArray[3] = 0;
     }
   }
